@@ -1,22 +1,20 @@
 import { Request, Response } from "express";
 import { createHmac, randomBytes } from "node:crypto";
-import { signupPayloadModel } from "./models";
+import { signinPayloadModel, signupPayloadModel } from "./models";
 import { db } from "../../db";
 import { usersTable } from "../../db/schema";
 import { eq } from "drizzle-orm";
-import { error } from "node:console";
+import { error, log } from "node:console";
 
 class AuthenticationController {
   public async handleSignup(req: Request, res: Response) {
     const validationResult = await signupPayloadModel.safeParseAsync(req.body);
 
     if (validationResult.error)
-      return res
-        .status(400)
-        .json({
-          message: "body validation failed",
-          error: validationResult.error.issues,
-        });
+      return res.status(400).json({
+        message: "body validation failed",
+        error: validationResult.error.issues,
+      });
 
     const { firstName, lastName, email, password } = validationResult.data!;
 
@@ -44,12 +42,49 @@ class AuthenticationController {
       })
       .returning({ id: usersTable.id });
 
-    return res
-      .status(201)
-      .json({
-        message: "user has been created successfully",
-        data: { id: result?.id },
+    return res.status(201).json({
+      message: "user has been created successfully",
+      data: { id: result?.id },
+    });
+  }
+
+  public async handleSignIn(req: Request, res: Response) {
+    const validationResult = await signinPayloadModel.safeParseAsync(req.body);
+
+    if (validationResult.error)
+      return res.status(400).json({
+        message: "body validation failed",
+        error: validationResult.error.issues,
       });
+
+    const { email, password } = validationResult.data;
+
+   const userSelect = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+
+  const user = userSelect[0]
+
+  if (!user) {
+    return res.status(404).json({
+      message: `User with email ${email} does not exist`,
+    })
+  }
+
+  const existingSalt = user.salt!
+    const hash = createHmac("sha256", existingSalt).update(password).digest("hex");
+
+    if(user.password !== hash) return res.status(400).json({
+      message: `email or password is invalid`
+    })
+
+    //TO DO: Token Banao
+
+    return res.json({
+      message: 'SignIn Success', 
+      data: { token: 1}
+    })
   }
 }
 
