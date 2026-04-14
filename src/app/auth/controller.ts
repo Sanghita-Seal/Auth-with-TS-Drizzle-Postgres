@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { usersTable } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { error, log } from "node:console";
+import { createUserToken } from "./utils/token";
 
 class AuthenticationController {
   public async handleSignup(req: Request, res: Response) {
@@ -48,44 +49,28 @@ class AuthenticationController {
     });
   }
 
-  public async handleSignIn(req: Request, res: Response) {
-    const validationResult = await signinPayloadModel.safeParseAsync(req.body);
+  public async handleSignin(req: Request, res: Response) {
+        const validationResult = await signinPayloadModel.safeParseAsync(req.body)
 
-    if (validationResult.error)
-      return res.status(400).json({
-        message: "body validation failed",
-        error: validationResult.error.issues,
-      });
+        if (validationResult.error) return res.status(400).json({ message: 'body validation failed', error: validationResult.error.issues })
 
-    const { email, password } = validationResult.data;
+        const { email, password } = validationResult.data
 
-   const userSelect = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email))
+        const [userSelect] = await db.select().from(usersTable).where(eq(usersTable.email, email))
 
-  const user = userSelect[0]
+        if (!userSelect) return res.status(404).json({ message: `user with email ${email} does not exists` })
 
-  if (!user) {
-    return res.status(404).json({
-      message: `User with email ${email} does not exist`,
-    })
-  }
+        const salt = userSelect.salt!
+        const hash = createHmac('sha256', salt).update(password).digest('hex')
 
-  const existingSalt = user.salt!
-    const hash = createHmac("sha256", existingSalt).update(password).digest("hex");
+        if (userSelect.password !== hash) return res.status(400).json({ message: `email or password is incorrect` })
 
-    if(user.password !== hash) return res.status(400).json({
-      message: `email or password is invalid`
-    })
+        // TODO: Token Banao
+        const token = createUserToken({id: userSelect.id})
 
-    //TO DO: Token Banao
+        return res.json({ message: 'Signin Success', data: { token } })
 
-    return res.json({
-      message: 'SignIn Success', 
-      data: { token: 1}
-    })
-  }
+    }
 }
 
 export default AuthenticationController;
