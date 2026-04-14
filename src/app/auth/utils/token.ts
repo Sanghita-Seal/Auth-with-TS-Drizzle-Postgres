@@ -2,7 +2,7 @@ import JWT from "jsonwebtoken";
 
 // Either u can make or delete token
 
-interface UserTokenPayload {
+export interface UserTokenPayload {
   id: string;
 }
 const JWT_SECRET = "myjwtsecret";
